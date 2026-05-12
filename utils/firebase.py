@@ -2,32 +2,28 @@ import pyrebase
 
 class Firebase:
     def __init__(self):
-        # Configuration key.
+        # Configuración actualizada con tus nuevos datos
         self._firebaseConfig = {
-            'apiKey': "AIzaSyCGw0yokHwaEgWWNc1OGDo-8Iwk8_p5R6Q",
-            'authDomain': "hackmexico2-784a3.firebaseapp.com",
-            'databaseURL': "https://hackmexico2-784a3-default-rtdb.firebaseio.com",
-            'projectId': "hackmexico2-784a3",
-            'storageBucket': "hackmexico2-784a3.appspot.com",
-            'messagingSenderId': "499824700976",
-            'appId': "1:499824700976:web:75ce309870353aa99c07f5",
-            'measurementId': "G-E3R7BYY22N"
+            'apiKey': "AIzaSyB2Q3IbCkMcpVm-7Aj6UTkv6FLFQzL3udI",
+            'authDomain': "hiddenplacesnlp.firebaseapp.com",
+            # Nota: La databaseURL suele ser https://[PROJECT_ID]-default-rtdb.firebaseio.com/
+            'databaseURL': "https://hiddenplacesnlp-default-rtdb.firebaseio.com",
+            'projectId': "hiddenplacesnlp",
+            'storageBucket': "hiddenplacesnlp.firebasestorage.app",
+            'messagingSenderId': "185162167479",
+            'appId': "1:185162167479:web:9143c09904a344f2390932"
         }
-        # Firebase.
+        # Inicialización de Firebase
         self._firebase = pyrebase.initialize_app(self._firebaseConfig)
-    
     
     def getFirebase(self):
         return self._firebase
     
     def getdb(self):
-        # Firebase Database.
         return self._firebase.database()
     
     def getauth(self):
-        # Firebase Authentication.
         return self._firebase.auth()
     
     def getstorage(self):
-        # Firebase Storage.
         return self._firebase.storage()

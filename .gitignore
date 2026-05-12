@@ -1,0 +1,15 @@
+# Firebase Credentials (SÚPER IMPORTANTE)
+*.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+
+# Mac system files
+.DS_Store
+
+# Streamlit
+.streamlit/config.toml 

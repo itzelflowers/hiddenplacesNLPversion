@@ -1,9 +1,7 @@
-# Importar las librerías necesarias.
 import streamlit as st
-from sections import login, maps,home
+from sections import login, maps, home
 from utils.firebase import Firebase
 
-# Registro de empresas.
 def bussines_register():
     st.title("Registro de Empresas")
     email = st.text_input('Correo Electrónico')
@@ -11,8 +9,6 @@ def bussines_register():
     name = st.text_input('Nombre Empresa')
     bss_type = st.selectbox('Tipo de Empresa', ['Comida', 'Cultura', 'Entretenimiento'])
     submit = st.button("Crear Empresa")
-
-    # Enviar información.
     if submit:           
         db = Firebase().getdb()
         auth = Firebase().getauth()
@@ -26,14 +22,6 @@ def bussines_register():
         st.success('La cuenta ha sido creada correctamente.')
         st.balloons()
 
-        # Limpiar información.
-        email = ''
-        password = ''
-        name = ''
-        bss_type = ''
-
-
-# Registro de usuarios.
 def user_register():
     st.title("Registro de Usuarios")
     email = st.text_input('Correo Electrónico')
@@ -41,7 +29,6 @@ def user_register():
     name = st.text_input('Nombre')
     last_name = st.text_input("Apellidos")
     submit = st.button("Crear Usuario")
-    # Enviar información.
     if submit:           
         db = Firebase().getdb()
         auth = Firebase().getauth()
@@ -55,13 +42,6 @@ def user_register():
         st.success('La cuenta ha sido creada correctamente.')
         st.balloons()
 
-        # Limpiar información.
-        email = ''
-        password = ''
-        name = ''
-        last_name = ''
-
-
 def register():
     st.title("Registrate")
     selected_option = st.radio("¿Qué tipo de usuario eres?", ("Cliente", "Empresa"))
@@ -70,22 +50,16 @@ def register():
     else:
         bussines_register()
 
-
-# Configuración de Streamlit.
 st.set_page_config(
     page_title="Hidden Places | Home",
     page_icon="🗺️",
     initial_sidebar_state="expanded",
 )
 
-# Iniciar Sesión.
 login.app()
 
-
-# Si hay usuario.
 if st.session_state['user_type'] != '':
     pass
-# No hay usuario.
 else:
     if "selection" not in st.session_state:
         home.app()

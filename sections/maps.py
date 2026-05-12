@@ -1,77 +1,69 @@
-# Importar librerías necesarias.
-# Web.
 import streamlit as st
 from streamlit_folium import st_folium
-# Data.
 import geopandas
-from shapely.geometry import LineString
 import folium
+import os
 from utils.firebase import Firebase
+
+# 1. RUTAS Y CONEXIÓN
+current_dir = os.path.dirname(os.path.abspath(__file__))
+root_path = os.path.abspath(os.path.join(current_dir, '..'))
+ruta_shape = os.path.join(root_path, 'shapefiles', 'poligonos_alcaldias_cdmx', 'poligonos_alcaldias_cdmx.shp')
+
 db = Firebase().getdb()
 
-# Shapefile CDMX.
-lineas_cdmx = geopandas.read_file(('./shapefiles/poligonos_alcaldias_cdmx/poligonos_alcaldias_cdmx.shp'))
-lineas_cdmx['centroide'] = lineas_cdmx.centroid
+# 2. CARGA DE SHAPEFILE
+@st.cache_data
+def load_geodata():
+    if os.path.exists(ruta_shape):
+        return geopandas.read_file(ruta_shape)
+    return None
 
+lineas_cdmx = load_geodata()
 
-# Diccionario.
-alcaldias = {
-    '09002': 'Azcapotzalco',
-    '09003': 'Coyoacán',
-    '09004': 'Cuajimalpa de Morelos',
-    '09005': 'Gustavo A. Madero',
-    '09006': 'Iztacalco',
-    '09007': 'Iztapalapa',
-    '09008': 'La Magadalena Contreras',
-    '09009': 'Milpa Alta',
-    '09010': 'Álvaro Obregón',
-    '09011': 'Tláhuac',
-    '09012': 'Tlalpan',
-    '09013': 'Xochimilco',
-    '09014': 'Benito Juárez',
-    '09015': 'Cuauhtémoc',
-    '09016': 'Miguel Hidalgo',
+# 3. DICCIONARIO DE ALCALDÍAS
+alcaldias_dict = {
+    '09002': 'Azcapotzalco', '09003': 'Coyoacán', '09004': 'Cuajimalpa de Morelos',
+    '09005': 'Gustavo A. Madero', '09006': 'Iztacalco', '09007': 'Iztapalapa',
+    '09008': 'La Magadalena Contreras', '09009': 'Milpa Alta', '09010': 'Álvaro Obregón',
+    '09011': 'Tláhuac', '09012': 'Tlalpan', '09013': 'Xochimilco',
+    '09014': 'Benito Juárez', '09015': 'Cuauhtémoc', '09016': 'Miguel Hidalgo',
     '09017': 'Venustiano Carranza'
 }
 
-
-# Inicalización de mapa.
-def init_map(center=(19.4325019109759, -99.1322510732777), zoom_start=10, map_type="cartodbpositron"):
-    return folium.Map(location=center, zoom_start=zoom_start, tiles=map_type)
-
-
-# Plotear mapa
-def plot_map(folium_map):
-    for idx, row in lineas_cdmx.iterrows():
-        folium.GeoJson(row.geometry,
-                        style_function=lambda x: {'fillColor': '#FF0000', 'color': '#000000', 'weight': 1.5, 'fillOpacity': 0.5},
-                        tooltip=alcaldias[row['CVEGEO']]).add_to(folium_map)
-        folium.Marker(location=[row.centroide.y, row.centroide.x], tooltip=alcaldias[row['CVEGEO']]).add_to(folium_map)
-    return folium_map
-
 def app():
-    m = init_map()
-    m = plot_map(m)
-    level1_map_data = st_folium(m)
-    st.session_state.selected_id = level1_map_data['last_object_clicked_tooltip']
-    if st.session_state.selected_id is not None:
-        st.subheader(f'{st.session_state.selected_id}')
-        lugares = db.child('Lugares').get().val()
-        for l in lugares:
-            lugar = db.child('Lugares').child(l).child('Location').get().val()
-            if st.session_state.selected_id == lugar:
-                location = db.child('Lugares').child(l).child('Location').get().val()
-                bss_type = db.child('Lugares').child(l).child('bss_type').get().val()
-                asistencia = db.child('Lugares').child(l).child('asistencia').get().val()
-                elevadores = db.child('Lugares').child(l).child('elevadores').get().val()
-                estacionamiento = db.child('Lugares').child(l).child('estacionamiento').get().val()
-                rampas = db.child('Lugares').child(l).child('rampas').get().val()
-                sillas_ruedas = db.child('Lugares').child(l).child('sillas_ruedas').get().val()
-                st.subheader(l)
-                st.write(f'Alcaldía: {location}')
-                st.write(f'Tipo de negocio: {bss_type}')
-                st.write(f'Asistencia Personal: {asistencia}')
-                st.write(f'Elevadores: {elevadores}')
-                st.write(f'Estacionamiento: {estacionamiento}')
-                st.write(f'Rampas: {rampas}')
-                st.write(f'Sillas de ruedas: {sillas_ruedas}')
+    # Inicializar mapa
+    m = folium.Map(location=[19.4325, -99.1332], zoom_start=11, tiles="cartodbpositron")
+    
+    # Dibujar Polígonos
+    if lineas_cdmx is not None:
+        for idx, row in lineas_cdmx.iterrows():
+            cve = row.get('CVEGEO', '')
+            nombre = alcaldias_dict.get(cve, "CDMX")
+            folium.GeoJson(
+                row.geometry,
+                style_function=lambda x: {'fillColor': '#FF0000', 'color': 'black', 'weight': 1, 'fillOpacity': 0.1},
+                tooltip=nombre
+            ).add_to(m)
+
+    # 4. TRAER MARCADORES (Usando x e y como en tu código)
+    try:
+        lugares_data = db.child('Lugares').get().val()
+        if lugares_data:
+            for nombre_lugar, info in lugares_data.items():
+                lat = info.get('x') # <-- Importante: tu Firebase usa 'x'
+                lng = info.get('y') # <-- Importante: tu Firebase usa 'y'
+                
+                if lat and lng:
+                    folium.Marker(
+                        location=[float(lat), float(lng)],
+                        tooltip=nombre_lugar,
+                        # Solo el nombre en el popup para la portada
+                        popup=folium.Popup(f"<b>{nombre_lugar}</b>", max_width=200),
+                        icon=folium.Icon(color="purple", icon="info-sign")
+                    ).add_to(m)
+    except Exception as e:
+        pass
+
+    # Renderizar
+    st_folium(m, width=700, height=500, key="mapa_home", returned_objects=[])

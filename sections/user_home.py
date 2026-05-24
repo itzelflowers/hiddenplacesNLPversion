@@ -4,6 +4,7 @@ import geopandas
 import folium
 from utils.firebase import Firebase
 from transformers import pipeline
+from utils.preprocesamiento import preprocesar_opiniones
 
 db = Firebase().getdb()
 
@@ -33,26 +34,21 @@ alcaldias = {
 @st.cache_resource
 def cargar_modelo():
     try:
-        return pipeline("summarization", model="facebook/bart-large-cnn")
+        return pipeline("summarization", model="sshleifer/distilbart-cnn-6-6")
     except Exception:
-        return pipeline("text2text-generation", model="t5-small")
+        return pipeline("text-generation", model="gpt2")
 
 def generar_resumen(opiniones_brutas):
-    if not opiniones_brutas:
+    from utils.preprocesamiento import preprocesar_opiniones
+
+    texto_limpio = preprocesar_opiniones(opiniones_brutas)
+    if not texto_limpio:
         return "Sin opiniones disponibles."
 
-    if isinstance(opiniones_brutas, list):
-        texto = " ".join([op for op in opiniones_brutas if op])
-    elif isinstance(opiniones_brutas, dict):
-        texto = " ".join(opiniones_brutas.values())
-    else:
-        return "Sin opiniones disponibles."
-
-    texto = texto[:1024]
+    texto_limpio = texto_limpio[:1024]
     summarizer = cargar_modelo()
-    resumen = summarizer(texto, max_length=130, min_length=30, do_sample=False)
-    
-    # Manejar ambos formatos de respuesta
+    resumen = summarizer(texto_limpio, max_length=130, min_length=30, do_sample=False)
+
     resultado = resumen[0]
     return resultado.get('summary_text') or resultado.get('generated_text', 'Sin resumen disponible.')
 
@@ -146,14 +142,81 @@ def app():
             st.markdown("---")
             st.markdown("## 🧠 Análisis de Inteligencia Artificial (NLP)")
 
+            bss_type = datos.get("bss_type", "")
+
+            if bss_type == "Salud":
+                # --- ANÁLISIS DE ACCESIBILIDAD ---
+                st.markdown("### ♿ Análisis de Accesibilidad")
+
+                CATEGORIAS_ACCESIBILIDAD = {
+                    "rampas": ["rampa", "rampas", "acceso", "entrada accesible", "desnivel", "escalón", "escalones"],
+                    "elevadores": ["elevador", "elevadores", "ascensor", "lift", "sube", "subir", "piso", "nivel"],
+                    "sillas_ruedas": ["silla de ruedas", "silla ruedas", "wheelchair", "movilidad reducida", "discapacidad", "accesible"],
+                    "estacionamiento": ["estacionamiento accesible", "cajón", "espacio discapacitados", "estacionamiento", "parking"],
+                    "asistencia": ["ayuda", "asistencia", "apoyo", "personal", "amable", "ayudaron", "atención", "servicio"]
+                }
+
+                if opiniones:
+                    # Preprocesar antes del matching
+                    texto = preprocesar_opiniones(opiniones)
+
+                    col1, col2 = st.columns(2)
+                    emojis = {"rampas": "🚧", "elevadores": "🛗", "sillas_ruedas": "♿", "estacionamiento": "🅿️", "asistencia": "🤝"}
+
+                    for i, (categoria, palabras) in enumerate(CATEGORIAS_ACCESIBILIDAD.items()):
+                        menciones = [p for p in palabras if p in texto]
+                        score = round((len(menciones) / len(palabras)) * 10, 1)
+                        col = col1 if i % 2 == 0 else col2
+                        with col:
+                            st.metric(
+                                label=f"{emojis[categoria]} {categoria.replace('_', ' ').title()}",
+                                value=f"{score}/10"
+                            )
+                            if menciones:
+                                st.caption(f"Menciones: {', '.join(menciones)}")
+                else:
+                    st.info("No hay opiniones disponibles para analizar.")
+
+            else:
+                # --- RESUMEN GENERAL DE EXPERIENCIA ---
+                st.markdown("### 🌟 Resumen de experiencia")
+
+                ASPECTOS_GENERALES = {
+                    "experiencia": ["increíble", "recomendable", "vale la pena", "bonito", "hermoso", "excelente", "maravilloso", "espectacular"],
+                    "servicio": ["atención", "amable", "servicio", "trato", "personal", "amabilidad", "atentos"],
+                    "accesibilidad": ["rampa", "elevador", "silla", "accesible", "discapacidad", "movilidad"],
+                    "precio": ["precio", "caro", "barato", "económico", "cobran", "costo"],
+                    "ubicación": ["ubicación", "llegar", "transporte", "estacionamiento", "céntrico"]
+                }
+
+                if opiniones:
+                    # Preprocesar antes del matching
+                    texto = preprocesar_opiniones(opiniones)
+
+                    aspectos_encontrados = []
+                    for aspecto, palabras in ASPECTOS_GENERALES.items():
+                        menciones = [p for p in palabras if p in texto]
+                        if menciones:
+                            aspectos_encontrados.append(f"**{aspecto.title()}**: {', '.join(menciones)}")
+
+                    if aspectos_encontrados:
+                        for aspecto in aspectos_encontrados:
+                            st.markdown(f"✅ {aspecto}")
+                    else:
+                        st.info("No se encontraron aspectos relevantes en las opiniones.")
+                else:
+                    st.info("No hay opiniones disponibles para este lugar.")
+
+            # --- RESUMEN BERT (para todos) ---
+            st.markdown("---")
             resumen_guardado = datos.get("resumen_nlp", "")
 
             if resumen_guardado:
+                st.markdown("### 📝 Resumen general")
                 st.info(resumen_guardado)
-            elif opiniones is not None:
-                with st.spinner("El algoritmo de NLP está procesando las reseñas actuales..."):
+            elif opiniones:
+                with st.spinner("Generando resumen con IA..."):
                     resumen = generar_resumen(opiniones)
                     db.child('Lugares').child(nombre).child('resumen_nlp').set(resumen)
+                    st.markdown("### 📝 Resumen general")
                     st.info(resumen)
-            else:
-                st.info("No hay reseñas disponibles para este lugar.")

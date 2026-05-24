@@ -1,4 +1,11 @@
 import streamlit as st
+
+st.set_page_config(
+    page_title="Hidden Places | Home",
+    page_icon="🗺️",
+    initial_sidebar_state="expanded",
+)
+
 from sections import login, maps, home
 from utils.firebase import Firebase
 
@@ -49,12 +56,6 @@ def register():
         user_register()
     else:
         bussines_register()
-
-st.set_page_config(
-    page_title="Hidden Places | Home",
-    page_icon="🗺️",
-    initial_sidebar_state="expanded",
-)
 
 login.app()
 

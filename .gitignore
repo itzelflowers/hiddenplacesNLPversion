@@ -6,10 +6,17 @@ __pycache__/
 *.py[cod]
 *$py.class
 venv/
+.venv/
 .env
 
 # Mac system files
 .DS_Store
 
 # Streamlit
-.streamlit/config.toml 
+.streamlit/config.toml
+
+# Archivos comprimidos
+*.zip
+
+# csv prueba
+lugares_exportados.csv

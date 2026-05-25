@@ -21,15 +21,28 @@ def normalizar_texto(texto):
 TIPOS_LUGAR = {
     "comida": [
         "comida", "comer", "restaurante", "cafeteria", "cafe",
-        "desayunar", "cenar", "almorzar", "torta", "tacos"
+        "desayunar", "cenar", "almorzar", "tacos", "bebida",
+        "platillo", "postre", "cocina", "carne", "hambre"
     ],
     "cultura": [
         "cultura", "cultural", "museo", "arte", "exposicion",
-        "galeria", "historia", "teatro", "biblioteca"
+        "galeria", "historia", "teatro", "biblioteca", "recorrido"
     ],
     "entretenimiento": [
-        "entretenimiento", "diversion", "cine", "parque",
-        "pasear", "turismo", "visitar", "familia"
+        "entretenimiento", "diversion", "cine", "parque", "bosque",
+        "jardin", "aire libre", "pasear", "turismo", "visitar",
+        "familia", "actividad", "niños", "aventura"
+    ],
+    "salud": [
+        "salud", "ortopedia", "ortopedicos", "ortopedico",
+        "silla de ruedas", "sillas de ruedas", "equipo medico",
+        "oxigeno", "farmacia", "muletas", "baston", "andadera",
+        "rehabilitacion"
+    ],
+    "servicio tecnico medico": [
+        "servicio tecnico", "servicio medico", "reparacion",
+        "ortopedia", "silla de ruedas", "equipo medico",
+        "soporte tecnico"
     ],
 }
 
@@ -92,7 +105,7 @@ ALCALDIAS_CDMX = [
 
 def valor_si_no(valor):
     """
-    Convierte valores como 'Sí', 'Si', 'No', True, False a booleano.
+    Convierte valores como Sí/No/True/False a booleano.
     """
     texto = normalizar_texto(valor)
 
@@ -120,7 +133,7 @@ def unir_opiniones(opiniones):
 
 def construir_documento_lugar(lugar):
     """
-    Convierte un lugar en un documento textual para búsqueda.
+    Convierte un lugar en un documento textual para búsqueda por keywords.
     """
     nombre = lugar.get("Place", "")
     ubicacion = lugar.get("Location", "")
@@ -147,10 +160,59 @@ def construir_documento_lugar(lugar):
 
     return normalizar_texto(documento)
 
+def coincide_tipo_lugar(lugar, tipos_solicitados):
+    """
+    Valida si el tipo del lugar coincide con alguno de los tipos solicitados.
+    Si no se solicitó tipo, no filtra.
+    """
+    if not tipos_solicitados:
+        return True
+
+    tipo_lugar = normalizar_texto(lugar.get("bss_type", ""))
+
+    equivalencias = {
+        "comida": ["comida"],
+        "cultura": ["cultura"],
+        "entretenimiento": ["entretenimiento"],
+        "salud": ["salud", "servicio tecnico medico"],
+        "servicio tecnico medico": ["salud", "servicio tecnico medico"],
+    }
+
+    tipos_validos = []
+
+    for tipo in tipos_solicitados:
+        tipos_validos.extend(equivalencias.get(tipo, [tipo]))
+
+    for tipo_valido in tipos_validos:
+        if tipo_valido == tipo_lugar:
+            return True
+        if tipo_valido in tipo_lugar:
+            return True
+        if tipo_lugar in tipo_valido:
+            return True
+
+    return False
+
+
+def coincide_ubicacion(lugar, ubicaciones_solicitadas):
+    """
+    Valida si la ubicación del lugar coincide con la ubicación solicitada.
+    Si no se solicitó ubicación, no filtra.
+    """
+    if not ubicaciones_solicitadas:
+        return True
+
+    ubicacion_lugar = normalizar_texto(lugar.get("Location", ""))
+
+    for ubicacion in ubicaciones_solicitadas:
+        if ubicacion in ubicacion_lugar:
+            return True
+
+    return False
 
 def extraer_intencion_consulta(query):
     """
-    Detecta tipo de lugar, accesibilidad y ubicación desde la consulta.
+    Detecta tipo de lugar, accesibilidad, conceptos y ubicación desde la consulta.
     """
     query_norm = normalizar_texto(query)
 
@@ -184,7 +246,8 @@ def extraer_intencion_consulta(query):
         if alcaldia in query_norm:
             intencion["ubicaciones"].append(alcaldia)
 
-    # Si detecta adulto mayor o accesible, reforzamos accesibilidad general
+    # Si el usuario habla de adulto mayor o accesibilidad general,
+    # reforzamos atributos de accesibilidad importantes.
     if "adulto_mayor" in intencion["conceptos"] or "accesible" in intencion["conceptos"]:
         for campo in ["rampas", "elevadores", "sillas_ruedas", "asistencia"]:
             if campo not in intencion["accesibilidad"]:
@@ -195,7 +258,7 @@ def extraer_intencion_consulta(query):
 
 def calcular_score_lugar(query, lugar, intencion):
     """
-    Calcula un puntaje de relevancia para un lugar.
+    Calcula un score de relevancia por metadatos y keywords.
     """
     score = 0
     razones = []
@@ -208,17 +271,20 @@ def calcular_score_lugar(query, lugar, intencion):
 
     # 1. Coincidencia por tipo de lugar
     for tipo in intencion["tipos"]:
-        if tipo == tipo_lugar:
-            score += 30
+        if coincide_tipo_lugar(lugar, [tipo]):
+            score += 35
             razones.append(f"Coincide con tipo de lugar: {tipo}")
 
     # 2. Coincidencia por ubicación
     for ubicacion in intencion["ubicaciones"]:
         if ubicacion in ubicacion_lugar:
-            score += 25
+            score += 30
             razones.append(f"Coincide con ubicación: {ubicacion}")
+        else:
+            score -= 10
+            razones.append(f"No coincide con ubicación solicitada: {ubicacion}")
 
-    # 3. Coincidencia por accesibilidad en metadatos
+    # 3. Coincidencia por accesibilidad
     for campo in intencion["accesibilidad"]:
         if valor_si_no(lugar.get(campo, "")):
             score += 25
@@ -246,7 +312,7 @@ def calcular_score_lugar(query, lugar, intencion):
         if coincidencias > 0:
             razones.append(f"Coincidencias de texto: {coincidencias}")
 
-    # 5. Pequeño bonus por tener texto NLP/resumen/opiniones
+    # 5. Bonus por tener texto disponible
     if lugar.get("resumen_nlp"):
         score += 5
 
@@ -255,18 +321,22 @@ def calcular_score_lugar(query, lugar, intencion):
 
     return score, razones
 
-
 def recuperar_lugares(query, lugares, top_k=10):
     """
     Recupera lugares relevantes a partir de una consulta en lenguaje natural.
-    Este es un retriever básico por keywords y metadatos.
+    Usa keywords + metadatos. No usa búsqueda semántica.
+
+    Estrategia:
+    1. Intenta búsqueda estricta por tipo y ubicación.
+    2. Si no encuentra resultados, usa búsqueda flexible por score.
     """
     if not query or not lugares:
         return []
 
     intencion = extraer_intencion_consulta(query)
 
-    resultados = []
+    resultados_estrictos = []
+    resultados_flexibles = []
 
     for lugar in lugares:
         if not isinstance(lugar, dict):
@@ -274,16 +344,36 @@ def recuperar_lugares(query, lugares, top_k=10):
 
         score, razones = calcular_score_lugar(query, lugar, intencion)
 
-        if score >= 30:
-            resultado = lugar.copy()
-            resultado["score_retriever"] = round(score, 2)
-            resultado["razones_retriever"] = razones
-            resultados.append(resultado)
+        if score < 10:
+            continue
 
-    resultados = sorted(
-        resultados,
+        resultado = lugar.copy()
+        resultado["score_retriever"] = round(score, 2)
+        resultado["razones_retriever"] = razones
+
+        pasa_tipo = coincide_tipo_lugar(lugar, intencion["tipos"])
+        pasa_ubicacion = coincide_ubicacion(lugar, intencion["ubicaciones"])
+
+        # Resultado estricto: respeta tipo y ubicación si fueron solicitados.
+        if pasa_tipo and pasa_ubicacion:
+            resultados_estrictos.append(resultado)
+
+        # Resultado flexible: guarda candidatos por si el filtro estricto queda vacío.
+        resultados_flexibles.append(resultado)
+
+    resultados_estrictos = sorted(
+        resultados_estrictos,
         key=lambda x: x.get("score_retriever", 0),
         reverse=True
     )
 
-    return resultados[:top_k]
+    resultados_flexibles = sorted(
+        resultados_flexibles,
+        key=lambda x: x.get("score_retriever", 0),
+        reverse=True
+    )
+
+    if resultados_estrictos:
+        return resultados_estrictos[:top_k]
+
+    return resultados_flexibles[:top_k]

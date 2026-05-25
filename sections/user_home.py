@@ -39,18 +39,42 @@ def cargar_modelo():
         return pipeline("text-generation", model="gpt2")
 
 def generar_resumen(opiniones_brutas):
-    from utils.preprocesamiento import preprocesar_opiniones
-
-    texto_limpio = preprocesar_opiniones(opiniones_brutas)
-    if not texto_limpio:
+    """
+    Genera un resumen usando las opiniones originales.
+    No usa texto preprocesado porque los modelos de resumen necesitan texto natural.
+    """
+    if not opiniones_brutas:
         return "Sin opiniones disponibles."
 
-    texto_limpio = texto_limpio[:1024]
-    summarizer = cargar_modelo()
-    resumen = summarizer(texto_limpio, max_length=130, min_length=30, do_sample=False)
+    if isinstance(opiniones_brutas, list):
+        texto = " ".join([str(op) for op in opiniones_brutas if op])
+    elif isinstance(opiniones_brutas, dict):
+        texto = " ".join([str(op) for op in opiniones_brutas.values() if op])
+    else:
+        texto = str(opiniones_brutas)
 
-    resultado = resumen[0]
-    return resultado.get('summary_text') or resultado.get('generated_text', 'Sin resumen disponible.')
+    texto = texto.strip()
+
+    if not texto:
+        return "Sin opiniones disponibles."
+
+    texto = texto[:1024]
+
+    summarizer = cargar_modelo()
+
+    try:
+        resumen = summarizer(
+            texto,
+            max_length=90,
+            min_length=20,
+            do_sample=False
+        )
+
+        resultado = resumen[0]
+        return resultado.get("summary_text") or resultado.get("generated_text", "Sin resumen disponible.")
+
+    except Exception as e:
+        return f"No se pudo generar el resumen automáticamente: {e}"
 
 def init_map(center=(19.4325019109759, -99.1322510732777), zoom_start=10, map_type="cartodbpositron"):
     return folium.Map(location=center, zoom_start=zoom_start, tiles=map_type)
@@ -207,16 +231,23 @@ def app():
                 else:
                     st.info("No hay opiniones disponibles para este lugar.")
 
-            # --- RESUMEN BERT (para todos) ---
+            # --- RESUMEN AUTOMÁTICO ---
             st.markdown("---")
+            st.markdown("### 📝 Resumen general")
+
             resumen_guardado = datos.get("resumen_nlp", "")
 
-            if resumen_guardado:
-                st.markdown("### 📝 Resumen general")
-                st.info(resumen_guardado)
-            elif opiniones:
-                with st.spinner("Generando resumen con IA..."):
+            if opiniones:
+                with st.spinner("Generando resumen automático con IA..."):
                     resumen = generar_resumen(opiniones)
-                    db.child('Lugares').child(nombre).child('resumen_nlp').set(resumen)
-                    st.markdown("### 📝 Resumen general")
                     st.info(resumen)
+
+                if resumen_guardado:
+                    with st.expander("Ver resumen guardado en la base"):
+                        st.write(resumen_guardado)
+
+            elif resumen_guardado:
+                st.info(resumen_guardado)
+
+            else:
+                st.info("Sin resumen disponible.")

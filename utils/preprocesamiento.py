@@ -12,6 +12,14 @@ STOPWORDS = {
     "sobre", "son", "su", "sus", "también", "te", "tengo", "ti", "toda",
     "todas", "todo", "todos", "tu", "tus", "un", "una", "unas", "unos",
     "ya", "yo", "él", "ésta", "éstas", "éste", "éstos"
+    
+    # Inglés para opiniones en spanglish
+    "the", "that", "of", "and", "or", "but", "in", "on", "at", "to",
+    "for", "with", "is", "was", "are", "were", "be", "been", "it",
+    "its", "from", "by", "as", "have", "has", "had", "not", "do",
+    "did", "will", "would", "could", "should", "my", "your", "his",
+    "her", "our", "their", "what", "which", "who", "how", "when",
+    "where", "very", "so", "just", "also", "this", "an", "a"
 }
 
 # --- DICCIONARIO DE LEMATIZACIÓN ---

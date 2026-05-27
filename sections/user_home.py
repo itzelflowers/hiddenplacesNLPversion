@@ -8,26 +8,15 @@ from utils.preprocesamiento import preprocesar_opiniones
 
 db = Firebase().getdb()
 
-# Shapefile CDMX.
 lineas_cdmx = geopandas.read_file(('./shapefiles/poligonos_alcaldias_cdmx/poligonos_alcaldias_cdmx.shp'))
 lineas_cdmx['centroide'] = lineas_cdmx.centroid
 
 alcaldias = {
-    '09002': 'Azcapotzalco',
-    '09003': 'Coyoacán',
-    '09004': 'Cuajimalpa de Morelos',
-    '09005': 'Gustavo A. Madero',
-    '09006': 'Iztacalco',
-    '09007': 'Iztapalapa',
-    '09008': 'La Magadalena Contreras',
-    '09009': 'Milpa Alta',
-    '09010': 'Álvaro Obregón',
-    '09011': 'Tláhuac',
-    '09012': 'Tlalpan',
-    '09013': 'Xochimilco',
-    '09014': 'Benito Juárez',
-    '09015': 'Cuauhtémoc',
-    '09016': 'Miguel Hidalgo',
+    '09002': 'Azcapotzalco', '09003': 'Coyoacán', '09004': 'Cuajimalpa de Morelos',
+    '09005': 'Gustavo A. Madero', '09006': 'Iztacalco', '09007': 'Iztapalapa',
+    '09008': 'La Magadalena Contreras', '09009': 'Milpa Alta', '09010': 'Álvaro Obregón',
+    '09011': 'Tláhuac', '09012': 'Tlalpan', '09013': 'Xochimilco',
+    '09014': 'Benito Juárez', '09015': 'Cuauhtémoc', '09016': 'Miguel Hidalgo',
     '09017': 'Venustiano Carranza'
 }
 
@@ -39,10 +28,6 @@ def cargar_modelo():
         return pipeline("text-generation", model="gpt2")
 
 def generar_resumen(opiniones_brutas):
-    """
-    Genera un resumen usando las opiniones originales.
-    No usa texto preprocesado porque los modelos de resumen necesitan texto natural.
-    """
     if not opiniones_brutas:
         return "Sin opiniones disponibles."
 
@@ -54,27 +39,20 @@ def generar_resumen(opiniones_brutas):
         texto = str(opiniones_brutas)
 
     texto = texto.strip()
-
     if not texto:
         return "Sin opiniones disponibles."
 
-    texto = texto[:1024]
+    # Limitar a 300 palabras
+    palabras = texto.split()[:300]
+    texto = " ".join(palabras)
 
     summarizer = cargar_modelo()
-
     try:
-        resumen = summarizer(
-            texto,
-            max_length=90,
-            min_length=20,
-            do_sample=False
-        )
-
+        resumen = summarizer(texto, max_length=150, min_length=40, do_sample=False, truncation=True)
         resultado = resumen[0]
         return resultado.get("summary_text") or resultado.get("generated_text", "Sin resumen disponible.")
-
     except Exception as e:
-        return f"No se pudo generar el resumen automáticamente: {e}"
+        return f"No se pudo generar el resumen: {e}"
 
 def init_map(center=(19.4325019109759, -99.1322510732777), zoom_start=10, map_type="cartodbpositron"):
     return folium.Map(location=center, zoom_start=zoom_start, tiles=map_type)
@@ -87,6 +65,8 @@ def plot_map(folium_map):
     return folium_map
 
 def app():
+    # --- TÍTULO ---
+    st.title("🗺️ Explora todos los lugares")
     st.markdown("<p style='color:gray;'>Selecciona un marcador para ver los detalles de accesibilidad.</p>", unsafe_allow_html=True)
 
     m = init_map()
@@ -113,15 +93,12 @@ def app():
         datos = db.child('Lugares').child(nombre).get().val()
 
         if datos:
-            # Convertir a dict si Firebase devuelve lista
             if isinstance(datos, list):
                 datos = {str(i): v for i, v in enumerate(datos) if v is not None}
 
-            # --- NOMBRE DEL LUGAR ---
             st.markdown(f"## 📍 {nombre}")
             st.markdown("---")
 
-            # --- TARJETA DE TIPO ---
             col1, col2 = st.columns(2)
             with col1:
                 bss_type = datos.get("bss_type", "N/A")
@@ -133,7 +110,6 @@ def app():
                 st.markdown("<br>", unsafe_allow_html=True)
                 st.markdown(f"🏠 **Alcaldía:** {datos.get('Location', 'N/A')}")
                 st.markdown(f"♿ **Acceso Silla:** {datos.get('sillas_ruedas', 'N/A')}")
-
             with col2:
                 st.markdown(f"🚧 **Rampas:** {datos.get('rampas', 'N/A')}")
                 st.markdown(f"🛗 **Elevadores:** {datos.get('elevadores', 'N/A')}")
@@ -142,7 +118,6 @@ def app():
             # --- OPINIONES ---
             st.markdown("---")
             st.markdown("## 💬 Opiniones de visitantes")
-
             opiniones = datos.get("opiniones_brutas", None)
 
             if opiniones:
@@ -169,9 +144,7 @@ def app():
             bss_type = datos.get("bss_type", "")
 
             if bss_type == "Salud":
-                # --- ANÁLISIS DE ACCESIBILIDAD ---
                 st.markdown("### ♿ Análisis de Accesibilidad")
-
                 CATEGORIAS_ACCESIBILIDAD = {
                     "rampas": ["rampa", "rampas", "acceso", "entrada accesible", "desnivel", "escalón", "escalones"],
                     "elevadores": ["elevador", "elevadores", "ascensor", "lift", "sube", "subir", "piso", "nivel"],
@@ -179,32 +152,23 @@ def app():
                     "estacionamiento": ["estacionamiento accesible", "cajón", "espacio discapacitados", "estacionamiento", "parking"],
                     "asistencia": ["ayuda", "asistencia", "apoyo", "personal", "amable", "ayudaron", "atención", "servicio"]
                 }
-
                 if opiniones:
-                    # Preprocesar antes del matching
                     texto = preprocesar_opiniones(opiniones)
-
                     col1, col2 = st.columns(2)
                     emojis = {"rampas": "🚧", "elevadores": "🛗", "sillas_ruedas": "♿", "estacionamiento": "🅿️", "asistencia": "🤝"}
-
                     for i, (categoria, palabras) in enumerate(CATEGORIAS_ACCESIBILIDAD.items()):
                         menciones = [p for p in palabras if p in texto]
                         score = round((len(menciones) / len(palabras)) * 10, 1)
                         col = col1 if i % 2 == 0 else col2
                         with col:
-                            st.metric(
-                                label=f"{emojis[categoria]} {categoria.replace('_', ' ').title()}",
-                                value=f"{score}/10"
-                            )
+                            st.metric(label=f"{emojis[categoria]} {categoria.replace('_', ' ').title()}", value=f"{score}/10")
                             if menciones:
                                 st.caption(f"Menciones: {', '.join(menciones)}")
                 else:
                     st.info("No hay opiniones disponibles para analizar.")
 
             else:
-                # --- RESUMEN GENERAL DE EXPERIENCIA ---
                 st.markdown("### 🌟 Resumen de experiencia")
-
                 ASPECTOS_GENERALES = {
                     "experiencia": ["increíble", "recomendable", "vale la pena", "bonito", "hermoso", "excelente", "maravilloso", "espectacular"],
                     "servicio": ["atención", "amable", "servicio", "trato", "personal", "amabilidad", "atentos"],
@@ -212,17 +176,13 @@ def app():
                     "precio": ["precio", "caro", "barato", "económico", "cobran", "costo"],
                     "ubicación": ["ubicación", "llegar", "transporte", "estacionamiento", "céntrico"]
                 }
-
                 if opiniones:
-                    # Preprocesar antes del matching
                     texto = preprocesar_opiniones(opiniones)
-
                     aspectos_encontrados = []
                     for aspecto, palabras in ASPECTOS_GENERALES.items():
                         menciones = [p for p in palabras if p in texto]
                         if menciones:
                             aspectos_encontrados.append(f"**{aspecto.title()}**: {', '.join(menciones)}")
-
                     if aspectos_encontrados:
                         for aspecto in aspectos_encontrados:
                             st.markdown(f"✅ {aspecto}")
@@ -231,23 +191,20 @@ def app():
                 else:
                     st.info("No hay opiniones disponibles para este lugar.")
 
-            # --- RESUMEN AUTOMÁTICO ---
+            # --- RESUMEN DISTILBART ---
             st.markdown("---")
             st.markdown("### 📝 Resumen general")
 
             resumen_guardado = datos.get("resumen_nlp", "")
 
-            if opiniones:
+            if resumen_guardado:
+                # Ya existe — mostrar directo sin regenerar
+                st.info(resumen_guardado)
+            elif opiniones:
+                # Generar, guardar en Firebase y mostrar
                 with st.spinner("Generando resumen automático con IA..."):
                     resumen = generar_resumen(opiniones)
+                    db.child('Lugares').child(nombre).child('resumen_nlp').set(resumen)
                     st.info(resumen)
-
-                if resumen_guardado:
-                    with st.expander("Ver resumen guardado en la base"):
-                        st.write(resumen_guardado)
-
-            elif resumen_guardado:
-                st.info(resumen_guardado)
-
             else:
                 st.info("Sin resumen disponible.")
